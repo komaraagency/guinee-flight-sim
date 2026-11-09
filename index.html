@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#87CEEB">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Guinée Flight Sim 3D 🇬🇳</title>
+<style>
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{margin:0; overflow:hidden; background:#87CEEB; font-family:system-ui,-apple-system,sans-serif;
+       touch-action:none; user-select:none; -webkit-user-select:none; overscroll-behavior:none}
+  canvas{display:block}
+
+  #hud{position:fixed; top:calc(8px + env(safe-area-inset-top)); left:calc(8px + env(safe-area-inset-left));
+       right:calc(8px + env(safe-area-inset-right)); display:flex; justify-content:space-between;
+       gap:6px; z-index:10; pointer-events:none}
+  .box{background:rgba(255,255,255,0.92); padding:7px 10px; border-radius:12px; font-weight:700;
+       font-size:13px; color:#111; box-shadow:0 2px 8px rgba(0,0,0,0.15); white-space:nowrap}
+  .box small{font-weight:600; opacity:.65}
+
+  #joystick{position:fixed; bottom:calc(22px + env(safe-area-inset-bottom));
+            left:calc(18px + env(safe-area-inset-left));
+            width:132px; height:132px; background:rgba(255,255,255,0.35);
+            border:2px solid rgba(255,255,255,0.6); border-radius:50%; z-index:10;
+            touch-action:none}
+  #stick{position:absolute; left:38px; top:38px; width:52px; height:52px; background:#fff;
+         border-radius:50%; box-shadow:0 4px 12px rgba(0,0,0,0.3); pointer-events:none;
+         transition:transform .05s linear}
+
+  #throttle{position:fixed; bottom:calc(26px + env(safe-area-inset-bottom));
+            right:calc(18px + env(safe-area-inset-right));
+            display:flex; flex-direction:column; gap:12px; z-index:10}
+  .btn{width:66px; height:66px; border-radius:50%; border:none; background:#fff; font-size:26px;
+       box-shadow:0 4px 12px rgba(0,0,0,0.22); touch-action:none; cursor:pointer}
+  .btn:active{transform:scale(0.94); background:#fdf3c9}
+
+  #msg{position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(17,17,17,0.92);
+       color:#fff; padding:14px 18px; border-radius:14px; text-align:center; display:none;
+       z-index:20; max-width:80vw; font-size:15px; line-height:1.4}
+
+  #overlay{position:fixed; inset:0; background:rgba(10,10,10,0.72); display:none; z-index:30;
+           align-items:center; justify-content:center; padding:24px}
+  #overlay.on{display:flex}
+  .panel{background:#fff; border-radius:20px; padding:26px 22px; text-align:center; max-width:340px; width:100%}
+  .panel h2{margin:0 0 8px; font-size:22px; color:#111}
+  .panel p{margin:0 0 20px; color:#444; font-size:15px; line-height:1.4}
+  .panel button{width:100%; padding:16px; border:none; border-radius:14px; background:#f5cf1b;
+                color:#171308; font-size:17px; font-weight:800; cursor:pointer}
+  .panel button:active{transform:scale(0.98)}
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <div class="box">🇬🇳 GUINÉE FLIGHT</div>
+  <div class="box"><small>ALT</small> <span id="alt">0</span>m</div>
+  <div class="box"><small>VIT</small> <span id="vit">0</span></div>
+  <div class="box">🪙 <span id="or">0</span>/20</div>
+</div>
+
+<div id="joystick"><div id="stick"></div></div>
+<div id="throttle">
+  <button class="btn" id="plus">🔼</button>
+  <button class="btn" id="moins">🔽</button>
+</div>
+<div id="msg"></div>
+
+<div id="overlay">
+  <div class="panel">
+    <h2 id="ovTitre">Mission terminée</h2>
+    <p id="ovTexte"></p>
+    <button id="rejouer">Rejouer</button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* =========================================================
+   GUINÉE FLIGHT — version smartphone
+   Corrigé : vitesse liée au temps (60/90/120 Hz), collines
+   solides, vraie fin de partie et bouton Rejouer.
+   ========================================================= */
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb);
+scene.fog = new THREE.Fog(0x87ceeb, 100, 600);
+
+const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, 1200);
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+document.body.appendChild(renderer.domElement);
+
+/* ---------- LUMIÈRE ---------- */
+scene.add(new THREE.AmbientLight(0xffffff, 0.85));
+const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+sun.position.set(100, 200, 100);
+scene.add(sun);
+
+/* ---------- SOL ET PISTE ---------- */
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(2000, 2000),
+  new THREE.MeshLambertMaterial({ color: 0x4caf50 })
+);
+ground.rotation.x = -Math.PI / 2;
+scene.add(ground);
+
+const piste = new THREE.Mesh(
+  new THREE.PlaneGeometry(30, 300),
+  new THREE.MeshLambertMaterial({ color: 0x333333 })
+);
+piste.rotation.x = -Math.PI / 2;
+piste.position.set(0, 0.1, -100);
+scene.add(piste);
+
+/* ---------- COLLINES SOLIDES ---------- */
+const collines = [];   // { x, z, r, h }
+const collinesGroup = new THREE.Group();
+const matColline = new THREE.MeshLambertMaterial({ color: 0x8d6e63 });
+
+function creerCollines() {
+  for (let i = 0; i < 30; i++) {
+    const r = 20 + Math.random() * 30;
+    const h = 30 + Math.random() * 50;
+    let x = (Math.random() - 0.5) * 800;
+    const z = -Math.random() * 800 - 60;
+
+    // dégager l'axe de décollage
+    if (Math.abs(x) < 90) x += 110;
+
+    const mesh = new THREE.Mesh(new THREE.ConeGeometry(r, h, 6), matColline);
+    mesh.position.set(x, h / 2, z);
+    collinesGroup.add(mesh);
+    collines.push({ x, z, r: r * 0.78, h });
+  }
+  scene.add(collinesGroup);
+}
+
+/* ---------- AVION ---------- */
+const plane = new THREE.Group();
+const fuselage = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 10),
+  new THREE.MeshLambertMaterial({ color: 0xf9a825 }));
+fuselage.rotation.x = Math.PI / 2;
+plane.add(fuselage);
+
+const wing = new THREE.Mesh(new THREE.BoxGeometry(16, 0.3, 3),
+  new THREE.MeshLambertMaterial({ color: 0xce1126 }));
+plane.add(wing);
+
+const tail = new THREE.Mesh(new THREE.BoxGeometry(5, 0.3, 2),
+  new THREE.MeshLambertMaterial({ color: 0x009460 }));
+tail.position.set(0, 0.5, -4.5);
+plane.add(tail);
+
+const cockpit = new THREE.Mesh(new THREE.SphereGeometry(1.2),
+  new THREE.MeshLambertMaterial({ color: 0x111111 }));
+cockpit.position.set(0, 0.8, 3);
+plane.add(cockpit);
+
+scene.add(plane);
+
+/* ---------- OR ---------- */
+let ors = [];
+const matOr = new THREE.MeshLambertMaterial({ color: 0xffd700, emissive: 0xffd700, emissiveIntensity: 0.5 });
+
+function creerOr() {
+  ors.forEach(o => scene.remove(o));
+  ors = [];
+  for (let i = 0; i < 20; i++) {
+    const o = new THREE.Mesh(new THREE.OctahedronGeometry(1.5), matOr.clone());
+    let x = (Math.random() - 0.5) * 300;
+    const z = -Math.random() * 600 - 20;
+    o.position.set(x, 20 + Math.random() * 40, z);
+    scene.add(o);
+    ors.push(o);
+  }
+}
+
+/* ---------- ÉTAT DU JEU ---------- */
+const DEPART = new THREE.Vector3(0, 15, -230);
+let speed = 0, joyX = 0, joyY = 0, score = 0;
+let etat = "jeu";            // jeu | crash | victoire
+let dernierTemps = 0, tempsAffichage = 0;
+
+const els = {
+  alt: document.getElementById("alt"),
+  vit: document.getElementById("vit"),
+  or: document.getElementById("or"),
+  msg: document.getElementById("msg"),
+  overlay: document.getElementById("overlay"),
+  ovTitre: document.getElementById("ovTitre"),
+  ovTexte: document.getElementById("ovTexte")
+};
+
+let msgTimer = null;
+function showMsg(html) {
+  els.msg.innerHTML = html;
+  els.msg.style.display = "block";
+  clearTimeout(msgTimer);
+  msgTimer = setTimeout(() => { els.msg.style.display = "none"; }, 2600);
+}
+
+function finDePartie(gagne) {
+  etat = gagne ? "victoire" : "crash";
+  document.getElementById("ovTitre").textContent = gagne ? "🏆 Mission réussie" : "💥 Crash";
+  document.getElementById("ovTexte").textContent = gagne
+    ? "Tu as récupéré les 20 pépites d'or de Guinée !"
+    : "Tu as percuté une colline. Réessaie, pilote !";
+  els.overlay.classList.add("on");
+}
+
+function reinitialiser() {
+  plane.position.copy(DEPART);
+  plane.rotation.set(0, 0, 0);
+  speed = 0; score = 0; joyX = 0; joyY = 0;
+  stick.style.transform = "translate(0px,0px)";
+  els.or.textContent = "0";
+  els.overlay.classList.remove("on");
+  etat = "jeu";
+  creerOr();
+  showMsg("🇬🇳 Décollage Conakry<br>Vitesse au-dessus de 120, puis joystick vers toi");
+}
+
+/* ---------- JOYSTICK (tactile + souris via Pointer Events) ---------- */
+const stick = document.getElementById("stick");
+const joy = document.getElementById("joystick");
+let pointerActif = null;
+
+function majJoystick(clientX, clientY) {
+  const r = joy.getBoundingClientRect();
+  const cx = r.left + r.width / 2;
+  const cy = r.top + r.height / 2;
+  let dx = (clientX - cx) / (r.width / 2 - 8);
+  let dy = (clientY - cy) / (r.height / 2 - 8);
+  dx = Math.max(-1, Math.min(1, dx));
+  dy = Math.max(-1, Math.min(1, dy));
+  joyX = dx; joyY = dy;
+  const max = r.width / 2 - 30;
+  stick.style.transform = `translate(${dx * max}px, ${dy * max}px)`;
+}
+
+function relacherJoystick() {
+  pointerActif = null;
+  joyX = 0; joyY = 0;
+  stick.style.transform = "translate(0px,0px)";
+}
+
+joy.addEventListener("pointerdown", e => {
+  pointerActif = e.pointerId;
+  joy.setPointerCapture(e.pointerId);
+  majJoystick(e.clientX, e.clientY);
+  e.preventDefault();
+});
+joy.addEventListener("pointermove", e => {
+  if (pointerActif !== e.pointerId) return;
+  majJoystick(e.clientX, e.clientY);
+  e.preventDefault();
+});
+joy.addEventListener("pointerup", relacherJoystick);
+joy.addEventListener("pointercancel", relacherJoystick);
+
+/* ---------- GAZ ---------- */
+function tenir(id, action) {
+  const el = document.getElementById(id);
+  let repet = null;
+  const demarrer = e => {
+    action();
+    clearInterval(repet);
+    repet = setInterval(action, 90);
+    e.preventDefault();
+  };
+  const arreter = () => { clearInterval(repet); repet = null; };
+  el.addEventListener("pointerdown", demarrer);
+  el.addEventListener("pointerup", arreter);
+  el.addEventListener("pointerleave", arreter);
+  el.addEventListener("pointercancel", arreter);
+}
+tenir("plus", () => { speed = Math.min(320, speed + 20); });
+tenir("moins", () => { speed = Math.max(0, speed - 20); });
+
+document.getElementById("rejouer").addEventListener("click", reinitialiser);
+
+/* ---------- BOUCLE PRINCIPALE (indépendante du taux de rafraîchissement) ---------- */
+const dir = new THREE.Vector3();
+const camPos = new THREE.Vector3();
+const camCible = new THREE.Vector3();
+
+function animate(now) {
+  requestAnimationFrame(animate);
+
+  const dt = Math.min((now - dernierTemps) / 1000 || 0, 0.05); // plafonné à 50 ms
+  dernierTemps = now;
+
+  if (etat === "jeu") {
+    /* --- commandes --- */
+    speed += joyY * -140 * dt;
+    speed = Math.max(0, Math.min(320, speed));
+    const peutMonter = speed > 120;
+
+    plane.rotation.z = -joyX * 0.6;
+    plane.rotation.x = joyY * 0.4;
+
+    /* --- déplacement --- */
+    dir.set(0, 0, -1).applyQuaternion(plane.quaternion);
+    plane.position.addScaledVector(dir, speed * 1.8 * dt);
+
+    if (peutMonter) plane.position.y += -joyY * 48 * dt;
+    if (plane.position.y < 2.2) plane.position.y = 2.2;
+    if (plane.position.y > 150) plane.position.y = 150;
+
+    /* --- collision collines --- */
+    for (let i = 0; i < collines.length; i++) {
+      const c = collines[i];
+      const dx = plane.position.x - c.x;
+      const dz = plane.position.z - c.z;
+      if (dx * dx + dz * dz < c.r * c.r && plane.position.y < c.h * 0.95) {
+        finDePartie(false);
+        break;
+      }
+    }
+
+    /* --- or --- */
+    for (let i = 0; i < ors.length; i++) {
+      const o = ors[i];
+      o.rotation.y += 2.4 * dt;
+      if (o.visible && plane.position.distanceTo(o.position) < 9) {
+        o.visible = false;
+        score++;
+        els.or.textContent = score;
+        if (score === 5) showMsg("🔥 5 pépites ! Tu es un vrai pilote guinéen");
+        if (score === 20) finDePartie(true);
+      }
+    }
+  }
+
+  /* --- caméra --- */
+  camCible.set(0, 6, 14).applyQuaternion(plane.quaternion).add(plane.position);
+  camPos.copy(camera.position).lerp(camCible, 1 - Math.exp(-6 * dt));
+  camera.position.copy(camPos);
+  camera.lookAt(plane.position);
+
+  /* --- HUD (2 fois par seconde suffisent) --- */
+  tempsAffichage += dt;
+  if (tempsAffichage > 0.12) {
+    tempsAffichage = 0;
+    els.alt.textContent = Math.floor(plane.position.y * 4);
+    els.vit.textContent = Math.floor(speed);
+  }
+
+  renderer.render(scene, camera);
+}
+
+/* ---------- INITIALISATION ---------- */
+creerCollines();
+creerOr();
+reinitialiser();
+requestAnimationFrame(t => { dernierTemps = t; animate(t); });
+
+addEventListener("resize", () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+// éviter le zoom double-tap
+document.addEventListener("gesturestart", e => e.preventDefault());
+</script>
+</body>
+</html>
