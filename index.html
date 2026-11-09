@@ -29,6 +29,8 @@
     background:rgba(255,255,255,.26);color:#fff;font-size:24px;font-weight:900;line-height:1;
     -webkit-tap-highlight-color:transparent;touch-action:none;box-shadow:0 4px 12px rgba(0,0,0,.35)}
   #updown button:active{background:rgba(252,209,22,.85);color:#111}
+  #btn-cam{position:fixed;right:100px;bottom:calc(max(24px,env(safe-area-inset-bottom)) + 250px);width:54px;height:54px;border-radius:50%;border:2px solid #fff;background:rgba(0,0,0,.42);color:#fff;font-size:20px;line-height:1;z-index:11;display:flex;align-items:center;justify-content:center}
+  #btn-vit{position:fixed;right:170px;bottom:calc(max(24px,env(safe-area-inset-bottom)) + 180px);width:54px;height:54px;border-radius:50%;border:2px solid #fcd116;background:rgba(0,0,0,.55);color:#fcd116;font-size:15px;font-weight:800;z-index:11}
   #screen{position:fixed;inset:0;z-index:30;display:flex;flex-direction:column;align-items:center;justify-content:center;
     background:linear-gradient(180deg,rgba(0,20,10,.85),rgba(0,0,0,.9));color:#fff;text-align:center;padding:24px}
   #screen h1{font-size:30px;margin:0 0 6px}
@@ -59,6 +61,8 @@
 <div id="gasL">GAZ</div>
 <div id="updown"><button id="btn-plus" type="button" aria-label="Monter les gaz">▲</button><button id="btn-moins" type="button" aria-label="Baisser les gaz">▼</button></div>
 <button id="fire">💥</button>
+<button id="btn-cam" type="button" aria-label="Changer de caméra">📷</button>
+<button id="btn-vit" type="button" aria-label="Vitesse du jeu">1x</button>
 
 <div id="screen">
   <h1>🇬🇳 GUINÉE FLIGHT</h1>
@@ -97,6 +101,7 @@ function fbm(x,y){
   return s;
 }
 const WATER = 2.5;
+const CITY = { x: 620, z: 520, size: 640 };
 function terrainH(x,z){
   // grandes collines (Fouta Djallon) + relief fin
   let base = fbm(x*0.0016+10, z*0.0016+10);
@@ -106,6 +111,10 @@ function terrainH(x,z){
   const d = Math.hypot(x, z+0);
   const flat = Math.min(1, Math.max(0, (d-260)/500));
   h = h*flat + 8*(1-flat);
+  /* plateau de la ville : sol plat pour les immeubles */
+  const dc = Math.hypot(x-CITY.x, z-CITY.z);
+  const flatV = Math.min(1, Math.max(0, (dc-330)/240));
+  h = h*flatV + 11*(1-flatV);
   return Math.max(h, WATER-1.2);
 }
 
@@ -329,6 +338,101 @@ const hangar = new THREE.Mesh(new THREE.BoxGeometry(46,16,30), new THREE.MeshLam
 hangar.position.set(-70,14,-20); runway.add(hangar);
 scene.add(runway);
 
+
+/* ---------- VILLE (comme le modèle Play Store) ---------- */
+function buildCity(){
+  const g = new THREE.Group();
+  const SZ = CITY.size, BLOCKS = 8, road = 16;
+  const cell = SZ/BLOCKS;
+
+  /* sol asphalté */
+  const asphalte = new THREE.Mesh(
+    new THREE.PlaneGeometry(SZ,SZ),
+    new THREE.MeshLambertMaterial({color:0x3a3d42})
+  );
+  asphalte.rotation.x = -Math.PI/2; asphalte.position.set(CITY.x, 11.2, CITY.z);
+  g.add(asphalte);
+
+  /* marquages des routes */
+  const lineMat = new THREE.MeshBasicMaterial({color:0xd8d8d0});
+  for(let i=1;i<BLOCKS;i++){
+    const off = -SZ/2 + i*cell;
+    const lx = new THREE.Mesh(new THREE.PlaneGeometry(SZ-road,1.6), lineMat);
+    lx.rotation.x=-Math.PI/2; lx.position.set(CITY.x, 11.35, CITY.z+off); g.add(lx);
+    const lz = new THREE.Mesh(new THREE.PlaneGeometry(1.6,SZ-road), lineMat);
+    lz.rotation.x=-Math.PI/2; lz.position.set(CITY.x+off, 11.35, CITY.z); g.add(lz);
+  }
+
+  /* immeubles instanciés */
+  const immeubles=[];
+  for(let bx=0;bx<BLOCKS;bx++) for(let bz=0;bz<BLOCKS;bz++){
+    const cx = CITY.x - SZ/2 + bx*cell + cell/2;
+    const cz = CITY.z - SZ/2 + bz*cell + cell/2;
+    const nb = 1 + Math.floor(hash(bx*7.1,bz*3.3)*2);
+    for(let k=0;k<nb;k++){
+      const w = 18 + hash(bx+k*11,bz*5)*16;
+      const d = 18 + hash(bx*3,bz+k*13)*16;
+      const tall = 22 + hash(bx*2.7+k,bz*4.1)*78;
+      const px = cx + (hash(bx+k,bz+7)-0.5)*(cell-34);
+      const pz = cz + (hash(bx+3,bz+k*2)-0.5)*(cell-34);
+      immeubles.push([px,pz,w,tall,d]);
+    }
+  }
+  const geo = new THREE.BoxGeometry(1,1,1);
+  const mat = new THREE.MeshLambertMaterial({color:0xffffff});
+  const mesh = new THREE.InstancedMesh(geo, mat, immeubles.length);
+  const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(), pos = new THREE.Vector3();
+  const col = new THREE.Color();
+  const TEINTES = [[0.82,0.80,0.76],[0.70,0.72,0.75],[0.86,0.78,0.62],[0.62,0.68,0.72],[0.78,0.74,0.68]];
+  immeubles.forEach((b,i)=>{
+    pos.set(b[0], 11 + b[3]/2, b[1]);
+    sc.set(b[2], b[3], b[4]);
+    m.compose(pos, q, sc);
+    mesh.setMatrixAt(i,m);
+    const t = TEINTES[Math.floor(hash(b[0],b[1])*TEINTES.length)%TEINTES.length];
+    const v = 0.86 + hash(b[0]*0.3,b[1]*0.3)*0.28;
+    col.setRGB(Math.min(1,t[0]*v), Math.min(1,t[1]*v), Math.min(1,t[2]*v));
+    mesh.setColorAt(i,col);
+  });
+  g.add(mesh);
+
+  /* toits techniques : petites boîtes sombres */
+  const toits = new THREE.InstancedMesh(geo, new THREE.MeshLambertMaterial({color:0x4b4f55}), immeubles.length);
+  immeubles.forEach((b,i)=>{
+    pos.set(b[0], 11 + b[3] + 2.5, b[1]);
+    sc.set(b[2]*0.35, 5, b[4]*0.35);
+    m.compose(pos,q,sc); toits.setMatrixAt(i,m);
+  });
+  g.add(toits);
+
+  /* quelques arbres de parc */
+  packTrees(g, 40);
+
+  /* pistes d'approche : deux bandes sombres vers la piste */
+  scene.add(g);
+  return g;
+}
+/* petits bosquets dans la ville */
+function packTrees(group, n){
+  const trees=[];
+  for(let i=0;i<n;i++){
+    const a = hash(i*3.7,1.1)*Math.PI*2, r = 120 + hash(i*1.9,4.3)*180;
+    const x = CITY.x + Math.cos(a)*r, z = CITY.z + Math.sin(a)*r;
+    trees.push([x, terrainH(x,z), z, 0.9+hash(x,z)*0.6]);
+  }
+  const crownG = new THREE.IcosahedronGeometry(9,1);
+  const crownM = new THREE.MeshLambertMaterial({color:0x2a6b2f});
+  const crown = new THREE.InstancedMesh(crownG, crownM, trees.length);
+  const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.9,1.4,10,5), new THREE.MeshLambertMaterial({color:0x4a3018}), trees.length);
+  const m=new THREE.Matrix4(), q=new THREE.Quaternion(), s=new THREE.Vector3();
+  trees.forEach((t,i)=>{
+    s.set(t[3],t[3],t[3]); m.compose(new THREE.Vector3(t[0],t[1]+5*t[3],t[2]),q,s); trunk.setMatrixAt(i,m);
+    s.set(t[3]*1.2,t[3]*1.1,t[3]*1.2); m.compose(new THREE.Vector3(t[0],t[1]+14*t[3],t[2]),q,s); crown.setMatrixAt(i,m);
+  });
+  group.add(trunk); group.add(crown);
+}
+buildCity();
+
 /* ---------- AVION DÉTAILLÉ ---------- */
 function makePlane(){
   const g = new THREE.Group();
@@ -414,29 +518,48 @@ for(let i=0;i<46;i++){
   scene.add(c); clouds.push(c);
 }
 
-/* ---------- OR + MISSIONS ---------- */
+/* ---------- CHECKPOINTS (parcours guide, comme le modele) ---------- */
 const goldMat = new THREE.MeshPhongMaterial({color:0xffd700, emissive:0xaa7a00, shininess:120});
-const golds=[]; let goldCount=0; const GOLD_TOTAL=12;
+const ringMat = new THREE.MeshBasicMaterial({color:0xfcd116, fog:false});
+const ringMatNext = new THREE.MeshBasicMaterial({color:0x9fe8ff, transparent:true, opacity:0.55, fog:false});
+const golds=[]; let goldCount=0, checkpoint=0;
+const GOLD_TOTAL=12;
+const PARCOURS=[];
+for(let i=0;i<GOLD_TOTAL;i++){
+  const ang = (i/GOLD_TOTAL)*Math.PI*2 - 0.6;
+  const dist = 620 + (i%3)*260;
+  const x = Math.cos(ang)*dist, z = Math.sin(ang)*dist - 140;
+  const y = Math.max(terrainH(x,z), WATER) + 70 + (i%2)*45;
+  PARCOURS.push(new THREE.Vector3(x,y,z));
+}
 function spawnGold(i){
-  const ang = (i/GOLD_TOTAL)*Math.PI*2 + Math.random()*0.4;
-  const dist = 900 + i*140;
-  const x = Math.cos(ang)*dist, z = -Math.sin(ang)*dist - 300;
-  const y = terrainH(x,z) + 55 + Math.random()*60;
-  const m = new THREE.Mesh(new THREE.OctahedronGeometry(11,0), goldMat);
-  m.position.set(x,y,z);
-  // anneau repère
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(24,1.4,8,28), new THREE.MeshBasicMaterial({color:0xfcd116, fog:false}));
+  const p = PARCOURS[i];
+  const m = new THREE.Mesh(new THREE.OctahedronGeometry(9,0), goldMat);
+  m.position.copy(p);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(30,1.8,8,32), ringMat);
+  ring.name='anneau';
   m.add(ring);
+  /* oriente l'anneau face au checkpoint suivant : on le traverse en vol */
+  const nxt = PARCOURS[(i+1)%GOLD_TOTAL];
+  m.lookAt(nxt);
   scene.add(m); golds.push(m);
 }
 for(let i=0;i<GOLD_TOTAL;i++) spawnGold(i);
+function majCheckpoints(){
+  golds.forEach((g,i)=>{
+    g.visible = (i===checkpoint || i===checkpoint+1);
+    const anneau = g.getObjectByName('anneau');
+    if(anneau) anneau.material = (i===checkpoint) ? ringMat : ringMatNext;
+  });
+}
+majCheckpoints();
 
 /* ---------- ÉTAT DE JEU ---------- */
 const S = {
   playing:false, over:false,
   speed:0, throttle:0.0, fuel:100, score:0,
   pitch:0, roll:0, yaw:0,
-  vy:0, onGround:true, time:0,
+  vy:0, onGround:true, time:0, timeScale:1, camMode:0,
   pos: new THREE.Vector3(0,7.9,230),
   quat: new THREE.Quaternion(),
   shake:0
@@ -448,7 +571,7 @@ function resetGame(){
   S.playing=true; S.over=false; S.speed=0; S.throttle=0; S.fuel=100; S.score=0; S.time=0;
   S.pitch=0; S.roll=0; S.yaw=0; S.vy=0; S.onGround=true;
   S.pos.set(0,7.9,230);
-  goldCount=0; golds.forEach(g=>g.visible=true);
+  goldCount=0; checkpoint=0; majCheckpoints();
   setGas(0);
   document.getElementById('or').textContent='0/'+GOLD_TOTAL;
   document.getElementById('score').textContent='0';
@@ -640,18 +763,23 @@ function update(dt){
   const agl = S.pos.y - groundY;
   $('warn').style.display = (!S.onGround && agl<35 && S.vy<-3) ? 'block':'none';
 
-  // --- or ---
-  for(const g of golds){
-    if(!g.visible) continue;
-    g.rotation.y+=dt*2;
-    if(g.position.distanceTo(S.pos)<34){
-      g.visible=false; goldCount++; S.score+=500; S.fuel=Math.min(100,S.fuel+12);
+  // --- checkpoints du parcours ---
+  golds.forEach((g,i)=>{
+    if(!g.visible) return;
+    g.rotation.y += dt*1.6;
+    if(i===checkpoint && g.position.distanceTo(S.pos)<42){
+      checkpoint++; goldCount++; S.score+=500; S.fuel=Math.min(100,S.fuel+12);
       beep(880,0.12); setTimeout(()=>beep(1175,0.18),90);
       $('or').textContent=goldCount+'/'+GOLD_TOTAL;
-      showMsg('🪙 OR récupéré ! +500 · carburant +12',1400);
-      if(goldCount===GOLD_TOTAL){ endGame(true); return; }
+      if(goldCount===GOLD_TOTAL){
+        majCheckpoints();
+        showMsg('🏁 Parcours terminé ! Pose-toi pour valider',2200);
+        endGame(true); return;
+      }
+      showMsg('✅ Checkpoint '+goldCount+'/'+GOLD_TOTAL+' · +500',1300);
+      majCheckpoints();
     }
-  }
+  });
   if(!S.onGround) S.score+=dt*5;
 
   // carburant vide en vol
@@ -674,17 +802,44 @@ function update(dt){
   $('fuel').style.width=S.fuel+'%';
   // mission
   let nearest=null, nd=1e9;
-  golds.forEach(g=>{ if(g.visible){ const d=g.position.distanceTo(S.pos); if(d<nd){nd=d;nearest=g;} }});
+  { const g=golds[checkpoint]; if(g){ const d=g.position.distanceTo(S.pos); if(d<nd){nd=d;nearest=g;} } }
   if(nearest){
     tmp.copy(nearest.position).sub(S.pos);
     let bearing = Math.atan2(tmp.x,-tmp.z) - S.yaw;
     bearing = Math.atan2(Math.sin(bearing),Math.cos(bearing));
     const dirTxt = Math.abs(bearing)<0.25 ? '⬆ tout droit' : (bearing>0 ? '➡ à droite' : '⬅ à gauche');
-    $('mission').textContent = 'Prochain OR : '+Math.round(nd)+' m '+dirTxt;
+    $('mission').textContent = 'Checkpoint '+(checkpoint+1)+'/'+GOLD_TOTAL+' · '+Math.round(nd)+' m '+dirTxt;
   } else $('mission').textContent='';
 }
 
+const CAM_NOMS=['Poursuite','Cabine','Aile','Dessus'];
+S.camMode=0;
 function updateCamera(dt){
+  if(S.camMode===1){
+    // vue cabine : devant l'avion
+    const p = new THREE.Vector3(0,4.2,7).applyQuaternion(plane.quaternion).add(S.pos);
+    camera.position.copy(p);
+    const ahead = new THREE.Vector3(0,2.2,-40).applyQuaternion(plane.quaternion).add(S.pos);
+    camera.up.set(0,1,0); camera.lookAt(ahead);
+    return;
+  }
+  if(S.camMode===2){
+    // vue aile : sur le côté
+    const p = new THREE.Vector3(16,6,2).applyQuaternion(plane.quaternion).add(S.pos);
+    camera.position.lerp(p, 1-Math.pow(0.002,dt));
+    const ahead = new THREE.Vector3(0,2,-30).applyQuaternion(plane.quaternion).add(S.pos);
+    camera.lookAt(ahead);
+    return;
+  }
+  if(S.camMode===3){
+    // vue du dessus
+    const p = new THREE.Vector3(0,90,-12).applyQuaternion(plane.quaternion).add(S.pos);
+    camera.position.lerp(p, 1-Math.pow(0.004,dt));
+    camera.up.set(0,0,-1);
+    camera.lookAt(S.pos);
+    camera.up.set(0,1,0);
+    return;
+  }
   // caméra de poursuite derrière et au-dessus, suit le cap
   const back = new THREE.Vector3(0,9,34).applyQuaternion(
     new THREE.Quaternion().setFromEuler(new THREE.Euler(S.pitch*0.5,S.yaw,0,'YXZ')));
@@ -703,9 +858,10 @@ function updateCamera(dt){
 
 function loop(){
   requestAnimationFrame(loop);
-  const dt=Math.min(clock.getDelta(),0.05);
+  const dtBrut=Math.min(clock.getDelta(),0.05);
+  const dt=dtBrut*(S.timeScale||1);
   update(dt);
-  updateCamera(dt);
+  updateCamera(dtBrut);
   updateTiles(S.pos.x,S.pos.z);
   // décor qui suit le joueur
   water.position.x=S.pos.x; water.position.z=S.pos.z;
