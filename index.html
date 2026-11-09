@@ -15,9 +15,9 @@
     background:rgba(206,17,38,.0);color:#fff;text-align:center;font-weight:700;font-size:13px;text-shadow:0 2px 6px #000}
   #fuelbar{position:fixed;top:calc(max(10px,env(safe-area-inset-top)) + 84px);left:20%;right:20%;height:7px;background:rgba(0,0,0,.4);border-radius:5px;z-index:10;overflow:hidden}
   #fuel{height:100%;width:100%;background:linear-gradient(90deg,#ce1126,#fcd116,#009460)}
-  #joy{position:fixed;bottom:max(24px,env(safe-area-inset-bottom));left:22px;width:140px;height:140px;border-radius:50%;
+  #joy{position:fixed;bottom:max(24px,env(safe-area-inset-bottom));left:20px;width:172px;height:172px;border-radius:50%;
     background:rgba(255,255,255,.22);border:2px solid rgba(255,255,255,.5);z-index:10}
-  #stick{position:absolute;left:45px;top:45px;width:50px;height:50px;border-radius:50%;background:#fff;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+  #stick{position:absolute;left:52px;top:52px;width:68px;height:68px;border-radius:50%;background:#fff;box-shadow:0 4px 12px rgba(0,0,0,.4)}
   #gas{position:fixed;bottom:max(24px,env(safe-area-inset-bottom));right:22px;width:62px;height:150px;border-radius:32px;
     background:rgba(255,255,255,.22);border:2px solid rgba(255,255,255,.5);z-index:10}
   #gasK{position:absolute;left:5px;width:48px;height:48px;border-radius:50%;background:#fcd116;box-shadow:0 4px 12px rgba(0,0,0,.4);bottom:5px}
@@ -333,9 +333,9 @@ function obstacleAt(x,y,z){
   for(let dx=-1;dx<=1;dx++) for(let dz=-1;dz<=1;dz++){
     for(const t of treesInTile(tx+dx, tz+dz)){
       const k = t[3];
-      const r = 9*k + 6;
+      const r = 7*k + 5;
       const ddx = x-t[0], ddz = z-t[2];
-      if(ddx*ddx + ddz*ddz < r*r && y < t[1] + 26*k) return 'un arbre';
+      if(ddx*ddx + ddz*ddz < r*r && y < t[1] + 17*k) return 'un arbre';
     }
   }
   return null;
@@ -382,26 +382,49 @@ const water = new THREE.Mesh(new THREE.PlaneGeometry(9000,9000), waterMat);
 water.rotation.x = -Math.PI/2; water.position.y = WATER; scene.add(water);
 
 /* ---------- PISTE ---------- */
+const AIRPORT_Y = 8;                       // hauteur du plateau de l'aeroport
+const RUNWAY_Y  = AIRPORT_Y + 0.35;        // dessus du bitume
+const PLANE_FOOT = 4.05;                   // bas des roues sous le centre de l'avion
 const runway = new THREE.Group();
-const track = new THREE.Mesh(new THREE.PlaneGeometry(40,820), new THREE.MeshLambertMaterial({color:0x2e2f33}));
-track.rotation.x=-Math.PI/2; track.position.y=6.15; runway.add(track);
-for(let i=-16;i<=16;i++){
-  const l = new THREE.Mesh(new THREE.PlaneGeometry(1.2,12), new THREE.MeshBasicMaterial({color:0xffffff}));
-  l.rotation.x=-Math.PI/2; l.position.set(0,6.25,i*24); runway.add(l);
+
+const track = new THREE.Mesh(new THREE.PlaneGeometry(46,880), new THREE.MeshLambertMaterial({color:0x33353a}));
+track.rotation.x=-Math.PI/2; track.position.y=RUNWAY_Y; runway.add(track);
+// accotements clairs pour bien voir la piste de loin
+const acc = new THREE.Mesh(new THREE.PlaneGeometry(60,900), new THREE.MeshLambertMaterial({color:0x6f7a5c}));
+acc.rotation.x=-Math.PI/2; acc.position.y=RUNWAY_Y-0.12; runway.add(acc);
+// axe central
+for(let i=-17;i<=17;i++){
+  const l = new THREE.Mesh(new THREE.PlaneGeometry(1.5,14), new THREE.MeshBasicMaterial({color:0xf4f4f4}));
+  l.rotation.x=-Math.PI/2; l.position.set(0,RUNWAY_Y+0.05,i*25); runway.add(l);
 }
-// bandes drapeau au seuil
-['#ce1126','#fcd116','#009460'].forEach((c,i)=>{
-  const s = new THREE.Mesh(new THREE.PlaneGeometry(10,6), new THREE.MeshBasicMaterial({color:c}));
-  s.rotation.x=-Math.PI/2; s.position.set(-10+i*10,6.3,-396); runway.add(s);
+// seuils (bandes blanches) aux deux bouts
+[-425,425].forEach(z=>{
+  for(let i=0;i<6;i++){
+    const b = new THREE.Mesh(new THREE.PlaneGeometry(1.6,18), new THREE.MeshBasicMaterial({color:0xffffff}));
+    b.rotation.x=-Math.PI/2; b.position.set(-16+i*6.4,RUNWAY_Y+0.05,z); runway.add(b);
+  }
 });
-// tour de contrôle
+// bandes drapeau Guine e au seuil de depart
+['#ce1126','#fcd116','#009460'].forEach((c,i)=>{
+  const s = new THREE.Mesh(new THREE.PlaneGeometry(12,8), new THREE.MeshBasicMaterial({color:c}));
+  s.rotation.x=-Math.PI/2; s.position.set(-12+i*12,RUNWAY_Y+0.06,415); runway.add(s);
+});
+// feux de bord de piste
+const feuMat = new THREE.MeshBasicMaterial({color:0xfff0b0});
+for(let i=-20;i<=20;i++){
+  [-24,24].forEach(x=>{
+    const f = new THREE.Mesh(new THREE.SphereGeometry(0.9,8,8), feuMat);
+    f.position.set(x, RUNWAY_Y+0.9, i*21); runway.add(f);
+  });
+}
+// tour de controle
 const tower = new THREE.Mesh(new THREE.BoxGeometry(8,30,8), new THREE.MeshLambertMaterial({color:0xe8e3d6}));
-tower.position.set(48,21,-40); runway.add(tower);
+tower.position.set(52,AIRPORT_Y+15,-40); runway.add(tower);
 const cab = new THREE.Mesh(new THREE.BoxGeometry(14,7,14), new THREE.MeshLambertMaterial({color:0x3b7fb5}));
-cab.position.set(48,38,-40); runway.add(cab);
+cab.position.set(52,AIRPORT_Y+33.5,-40); runway.add(cab);
 // hangar
 const hangar = new THREE.Mesh(new THREE.BoxGeometry(46,16,30), new THREE.MeshLambertMaterial({color:0xb23a2f}));
-hangar.position.set(-70,14,-20); runway.add(hangar);
+hangar.position.set(-70,AIRPORT_Y+8,-20); runway.add(hangar);
 scene.add(runway);
 
 
@@ -922,7 +945,7 @@ const S = {
   speed:0, throttle:0.0, fuel:100, score:0,
   pitch:0, roll:0, yaw:0,
   vy:0, onGround:true, time:0, timeScale:1, camMode:0,
-  pos: new THREE.Vector3(0,7.9,380),
+  pos: new THREE.Vector3(0, RUNWAY_Y+PLANE_FOOT, 380),
   quat: new THREE.Quaternion(),
   shake:0
 };
@@ -932,7 +955,7 @@ const MIN_FLY = 75, MAX_SPEED = 240;
 function resetGame(){
   S.playing=true; S.over=false; S.speed=0; S.throttle=0; S.fuel=100; S.score=0; S.time=0;
   S.pitch=0; S.roll=0; S.yaw=0; S.vy=0; S.onGround=true;
-  S.pos.set(0,7.9,380);
+  S.pos.set(0, RUNWAY_Y+PLANE_FOOT, 380);
   goldCount=0; checkpoint=0; majCheckpoints();
   setGas(0);
   document.getElementById('or').textContent='0/'+GOLD_TOTAL;
@@ -946,9 +969,11 @@ const joyEl=document.getElementById('joy'), stickEl=document.getElementById('sti
 const gasEl=document.getElementById('gas'), gasK=document.getElementById('gasK');
 let joyId=null, gasId=null;
 
+const JOY_R = 86, STICK_R = 34;   // rayon du pad et du pouce
 function setStick(dx,dy){
   joy.x=dx; joy.y=dy;
-  stickEl.style.left=(45+dx*45)+'px'; stickEl.style.top=(45+dy*45)+'px';
+  stickEl.style.left=(JOY_R-STICK_R+dx*(JOY_R-STICK_R))+'px';
+  stickEl.style.top =(JOY_R-STICK_R+dy*(JOY_R-STICK_R))+'px';
 }
 function setGas(v){
   S.throttle=Math.max(0,Math.min(1,v));
@@ -956,7 +981,7 @@ function setGas(v){
 }
 function joyMove(t){
   const r=joyEl.getBoundingClientRect();
-  let dx=(t.clientX-(r.left+r.width/2))/55, dy=(t.clientY-(r.top+r.height/2))/55;
+  let dx=(t.clientX-(r.left+r.width/2))/62, dy=(t.clientY-(r.top+r.height/2))/62;
   const m=Math.hypot(dx,dy); if(m>1){dx/=m;dy/=m;}
   setStick(dx,dy);
 }
@@ -1078,9 +1103,13 @@ function update(dt){
 
   const flying = S.speed>=MIN_FLY;
 
-  // --- commandes ---
-  const pitchIn = joy.y;          // bas = cabrer (tirer), haut = piquer
-  const rollIn  = joy.x;
+  // --- commandes (lissees pour un pilotage fluide) ---
+  if(!S.joyS) S.joyS = {x:0,y:0};
+  const kLiss = Math.min(1, dt*7);
+  S.joyS.x += (joy.x - S.joyS.x) * kLiss;
+  S.joyS.y += (joy.y - S.joyS.y) * kLiss;
+  const pitchIn = S.joyS.y;       // bas = cabrer (tirer), haut = piquer
+  const rollIn  = S.joyS.x;
   if(S.onGround){
     S.yaw -= rollIn*dt*0.5*Math.min(1,S.speed/60);
     S.pitch += ((flying && pitchIn>0.2 ? -pitchIn*0.5 : 0) - S.pitch)*Math.min(1,dt*4);
@@ -1092,8 +1121,8 @@ function update(dt){
     S.pitch += ((-pitchIn*0.55*ctrl) - S.pitch)*Math.min(1,dt*3);
     /* mode arcade : joystick relache -> l'avion se remet a plat et reprend de l'altitude doucement */
     if(Math.abs(pitchIn) < 0.08){ S.vy += (S.pos.y < 120 ? 6 : 0) * dt; }
-    S.roll  += ((-rollIn*0.95) - S.roll)*Math.min(1,dt*3.2);
-    S.yaw   += Math.sin(S.roll)*dt*0.9*ctrl;
+    S.roll  += ((-rollIn*0.78) - S.roll)*Math.min(1,dt*2.4);
+    S.yaw   += Math.sin(S.roll)*dt*1.15*ctrl;
     // décrochage
     if(S.speed<MIN_FLY*0.85){ S.pitch += (0.45-S.pitch)*Math.min(1,dt*1.2); }
   }
@@ -1107,18 +1136,21 @@ function update(dt){
   const hx = fwd.x, hz = fwd.z, hn = Math.hypot(hx,hz) || 1;
   S.pos.x += (hx/hn)*v*dt;  S.pos.z += (hz/hn)*v*dt;
   if(!S.onGround){
-    // portance vs gravité
-    const lift = Math.min(1, S.speed/MIN_FLY);
-    const cible = -Math.sin(S.pitch) * v * 1.1 * lift;           // nez cabre (pitch<0) => monte
-    const portance = (-22 + 22*lift*Math.cos(S.roll))*dt;        // la gravite est compensee en vol
-    S.vy += portance + (cible - S.vy) * Math.min(1, dt*1.6);
-    S.vy *= (1-0.1*dt);
-    S.vy = Math.max(-40, Math.min(26, S.vy));
-    S.pos.y += S.vy*dt + fwd.y*v*dt*0.0;
+    /* Vitesse verticale commandee directement : tirer le joystick = monter.
+       Simple, previsible, et impossible de rester colle au sol. */
+    const lift = Math.min(1, S.speed/MIN_FLY);           // pas de montee sans vitesse
+    const pousse = Math.max(-1, Math.min(1, pitchIn));   // +1 = joystick tire vers le bas = monter
+    let cible;
+    if(Math.abs(pousse) < 0.12) cible = 9 * lift;        // au neutre : legere montee
+    else if(pousse > 0)          cible = (9 + pousse*46) * lift;   // jusqu'a 55 m/s
+    else                         cible = (9 + pousse*52) * lift;   // descente jusqu'a -43 m/s
+    S.vy += (cible - S.vy) * Math.min(1, dt*3.5);
+    S.pos.y += S.vy * dt;
+    if(S.pos.y > 1600){ S.pos.y = 1600; if(S.vy>0) S.vy = 0; }
   }
 
   // --- sol ---
-  const gh = Math.max(terrainH(S.pos.x,S.pos.z), WATER) + 3.2;
+  const gh = Math.max(terrainH(S.pos.x,S.pos.z), WATER) + PLANE_FOOT;
   /* regard vers l'avant : si une colline arrive, on affiche une alerte */
   const sol1 = Math.max(terrainH(S.pos.x+fwd.x*220, S.pos.z+fwd.z*220), WATER);
   const sol2 = Math.max(terrainH(S.pos.x+fwd.x*420, S.pos.z+fwd.z*420), WATER);
@@ -1134,12 +1166,12 @@ function update(dt){
       S.assist = Math.max(S.assist||0, force);
     } else S.assist = 0;
   }
-  const onRunway = Math.abs(S.pos.x)<22 && Math.abs(S.pos.z+0)<410;
-  const groundY = onRunway ? 7.9 : gh;
+  const onRunway = Math.abs(S.pos.x)<24 && Math.abs(S.pos.z+0)<440;
+  const groundY = onRunway ? RUNWAY_Y+PLANE_FOOT : gh;
   if(S.onGround){
     S.pos.y = groundY;
   } else if(S.pos.y <= groundY){
-    const hard = S.vy < -20 || Math.abs(S.roll)>0.7 || Math.abs(S.pitch)>0.6 || (!onRunway && S.vy < -12);
+    const hard = onRunway ? (S.vy < -14 || Math.abs(S.roll) > 0.55) : (S.vy < -9 || Math.abs(S.roll) > 0.4);
     if(hard){
       plane.position.copy(S.pos); S.shake=1;
       beep(70,0.6,'sawtooth');
