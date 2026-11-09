@@ -99,7 +99,7 @@
   <h1>🇬🇳 GUINÉE FLIGHT</h1>
   <div class="flag"><i style="background:#ce1126"></i><i style="background:#fcd116"></i><i style="background:#009460"></i></div>
   <p id="sub">Décolle de Conakry, survole le Fouta Djallon et récupère l'or des mines de Siguiri.</p>
-  <p style="font-size:13px;opacity:.8">Joystick : piquer / cabrer / virer<br>Boutons ▲▼ ou curseur jaune : régler les gaz<br>Passe 90 km/h sur la piste pour décoller</p>
+  <p style="font-size:13px;opacity:.8">Joystick : piquer / cabrer / virer<br>Boutons ▲▼ ou curseur jaune : régler les gaz<br>Passe 75 km/h sur la piste, tire un peu le joystick</p>
   <button id="go">DÉCOLLER</button>
 </div>
 
@@ -141,7 +141,7 @@ function terrainH(x,z){
   let h = base*160 + ridge*ridge*110 - 40;
   // zone plate autour de l'aéroport
   const d = Math.hypot(x, z+0);
-  const flat = Math.min(1, Math.max(0, (d-260)/500));
+  const flat = Math.min(1, Math.max(0, (d-460)/500));
   h = h*flat + 8*(1-flat);
   /* plateau de la ville : sol plat pour les immeubles */
   const dc = Math.hypot(x-CITY.x, z-CITY.z);
@@ -267,7 +267,7 @@ function buildTile(tx,tz){
     const wx = tx*TILE + (hash(tx*13+i,tz*7)-0.5)*TILE;
     const wz = tz*TILE + (hash(tx*5,tz*17+i)-0.5)*TILE;
     const h = terrainH(wx,wz);
-    if(h>WATER+3 && h<110 && Math.hypot(wx,wz)>220) trees.push([wx,h,wz,0.8+hash(wx,wz)*1.2]);
+    if(h>WATER+3 && h<110 && Math.hypot(wx,wz)>620 && !(Math.abs(wx)<140 && Math.abs(wz)<1200)) trees.push([wx,h,wz,0.8+hash(wx,wz)*1.2]);
   }
   if(trees.length){
     const trunkG = new THREE.CylinderGeometry(0.9,1.5,11,6);
@@ -315,9 +315,9 @@ function treesInTile(tx,tz){
   const arr=[];
   for(let i=0;i<60;i++){
     const wx = tx*TILE + (hash(tx*13+i,tz*7)-0.5)*TILE;
-    const wz = tx*TILE + (hash(tx*5,tz*17+i)-0.5)*TILE;
+    const wz = tz*TILE + (hash(tx*5,tz*17+i)-0.5)*TILE;
     const h = terrainH(wx,wz);
-    if(h>WATER+3 && h<110 && Math.hypot(wx,wz)>220) arr.push([wx,h,wz,0.8+hash(wx,wz)*1.2]);
+    if(h>WATER+3 && h<110 && Math.hypot(wx,wz)>620 && !(Math.abs(wx)<140 && Math.abs(wz)<1200)) arr.push([wx,h,wz,0.8+hash(wx,wz)*1.2]);
   }
   if(treeCache.size > 600) treeCache.clear();
   treeCache.set(k,arr);
@@ -383,16 +383,16 @@ water.rotation.x = -Math.PI/2; water.position.y = WATER; scene.add(water);
 
 /* ---------- PISTE ---------- */
 const runway = new THREE.Group();
-const track = new THREE.Mesh(new THREE.PlaneGeometry(36,520), new THREE.MeshLambertMaterial({color:0x2e2f33}));
+const track = new THREE.Mesh(new THREE.PlaneGeometry(40,820), new THREE.MeshLambertMaterial({color:0x2e2f33}));
 track.rotation.x=-Math.PI/2; track.position.y=6.15; runway.add(track);
-for(let i=-10;i<=10;i++){
+for(let i=-16;i<=16;i++){
   const l = new THREE.Mesh(new THREE.PlaneGeometry(1.2,12), new THREE.MeshBasicMaterial({color:0xffffff}));
   l.rotation.x=-Math.PI/2; l.position.set(0,6.25,i*24); runway.add(l);
 }
 // bandes drapeau au seuil
 ['#ce1126','#fcd116','#009460'].forEach((c,i)=>{
   const s = new THREE.Mesh(new THREE.PlaneGeometry(10,6), new THREE.MeshBasicMaterial({color:c}));
-  s.rotation.x=-Math.PI/2; s.position.set(-10+i*10,6.3,-246); runway.add(s);
+  s.rotation.x=-Math.PI/2; s.position.set(-10+i*10,6.3,-396); runway.add(s);
 });
 // tour de contrôle
 const tower = new THREE.Mesh(new THREE.BoxGeometry(8,30,8), new THREE.MeshLambertMaterial({color:0xe8e3d6}));
@@ -922,17 +922,17 @@ const S = {
   speed:0, throttle:0.0, fuel:100, score:0,
   pitch:0, roll:0, yaw:0,
   vy:0, onGround:true, time:0, timeScale:1, camMode:0,
-  pos: new THREE.Vector3(0,7.9,230),
+  pos: new THREE.Vector3(0,7.9,380),
   quat: new THREE.Quaternion(),
   shake:0
 };
 const joy={x:0,y:0};
-const MIN_FLY = 90, MAX_SPEED = 330;
+const MIN_FLY = 75, MAX_SPEED = 240;
 
 function resetGame(){
   S.playing=true; S.over=false; S.speed=0; S.throttle=0; S.fuel=100; S.score=0; S.time=0;
   S.pitch=0; S.roll=0; S.yaw=0; S.vy=0; S.onGround=true;
-  S.pos.set(0,7.9,230);
+  S.pos.set(0,7.9,380);
   goldCount=0; checkpoint=0; majCheckpoints();
   setGas(0);
   document.getElementById('or').textContent='0/'+GOLD_TOTAL;
@@ -1069,7 +1069,7 @@ function update(dt){
 
   // --- moteur ---
   const targetSpeed = S.throttle*MAX_SPEED;
-  const acc = S.fuel>0 ? 60 : 0;
+  const acc = S.fuel>0 ? (S.onGround ? 24 : 45) : 0;
   if(S.speed<targetSpeed) S.speed=Math.min(targetSpeed,S.speed+acc*dt);
   else S.speed=Math.max(targetSpeed,S.speed-45*dt);
   if(S.onGround && S.throttle<0.05) S.speed=Math.max(0,S.speed-60*dt);
@@ -1085,10 +1085,13 @@ function update(dt){
     S.yaw -= rollIn*dt*0.5*Math.min(1,S.speed/60);
     S.pitch += ((flying && pitchIn>0.2 ? -pitchIn*0.5 : 0) - S.pitch)*Math.min(1,dt*4);
     S.roll += (0-S.roll)*Math.min(1,dt*6);
-    if(flying && pitchIn>0.25){ S.onGround=false; S.vy=14; }
+    const finPiste = S.pos.z < 60;
+    if(S.speed>=MIN_FLY+8 && (pitchIn>0.1 || (S.throttle>0.8 && finPiste))){ S.onGround=false; S.vy=16; S.pitch=-0.12; }
   } else {
     const ctrl = Math.min(1,S.speed/140);
     S.pitch += ((-pitchIn*0.55*ctrl) - S.pitch)*Math.min(1,dt*3);
+    /* mode arcade : joystick relache -> l'avion se remet a plat et reprend de l'altitude doucement */
+    if(Math.abs(pitchIn) < 0.08){ S.vy += (S.pos.y < 120 ? 6 : 0) * dt; }
     S.roll  += ((-rollIn*0.95) - S.roll)*Math.min(1,dt*3.2);
     S.yaw   += Math.sin(S.roll)*dt*0.9*ctrl;
     // décrochage
@@ -1101,24 +1104,43 @@ function update(dt){
   // --- déplacement ---
   fwd.set(0,0,-1).applyQuaternion(plane.quaternion);
   const v = S.speed*0.55;   // unités/s
-  S.pos.addScaledVector(fwd, v*dt);
+  const hx = fwd.x, hz = fwd.z, hn = Math.hypot(hx,hz) || 1;
+  S.pos.x += (hx/hn)*v*dt;  S.pos.z += (hz/hn)*v*dt;
   if(!S.onGround){
     // portance vs gravité
     const lift = Math.min(1, S.speed/MIN_FLY);
-    S.vy += (-22 + 22*lift*Math.cos(S.pitch)*Math.cos(S.roll))*dt;
-    S.vy *= (1-0.15*dt);
+    const cible = -Math.sin(S.pitch) * v * 1.1 * lift;           // nez cabre (pitch<0) => monte
+    const portance = (-22 + 22*lift*Math.cos(S.roll))*dt;        // la gravite est compensee en vol
+    S.vy += portance + (cible - S.vy) * Math.min(1, dt*1.6);
+    S.vy *= (1-0.1*dt);
+    S.vy = Math.max(-40, Math.min(26, S.vy));
     S.pos.y += S.vy*dt + fwd.y*v*dt*0.0;
   }
 
   // --- sol ---
   const gh = Math.max(terrainH(S.pos.x,S.pos.z), WATER) + 3.2;
-  const onRunway = Math.abs(S.pos.x)<20 && Math.abs(S.pos.z+0)<270;
+  /* regard vers l'avant : si une colline arrive, on affiche une alerte */
+  const sol1 = Math.max(terrainH(S.pos.x+fwd.x*220, S.pos.z+fwd.z*220), WATER);
+  const sol2 = Math.max(terrainH(S.pos.x+fwd.x*420, S.pos.z+fwd.z*420), WATER);
+  const sol0 = Math.max(terrainH(S.pos.x, S.pos.z), WATER);
+  const hautRequise = Math.max(sol1, sol2) + 38;          // marge de securite devant
+  S.terrainAlert = (!S.onGround && S.pos.y < hautRequise);
+  if(!S.onGround && S.speed >= MIN_FLY){
+    /* assistance : si une colline arrive, on pousse doucement l'avion vers le haut */
+    const manque = hautRequise - S.pos.y;
+    if(manque > 0){
+      const force = Math.min(1, manque/60);
+      S.vy += (30*force - S.vy*0.0) * dt * 2.2;
+      S.assist = Math.max(S.assist||0, force);
+    } else S.assist = 0;
+  }
+  const onRunway = Math.abs(S.pos.x)<22 && Math.abs(S.pos.z+0)<410;
   const groundY = onRunway ? 7.9 : gh;
   if(S.onGround){
     S.pos.y = groundY;
   } else if(S.pos.y <= groundY){
-    const hard = S.vy < -14 || Math.abs(S.roll)>0.5 || Math.abs(S.pitch)>0.4 || !onRunway;
-    if(hard || S.speed>MIN_FLY*2.2 && !onRunway){
+    const hard = S.vy < -20 || Math.abs(S.roll)>0.7 || Math.abs(S.pitch)>0.6 || (!onRunway && S.vy < -12);
+    if(hard){
       plane.position.copy(S.pos); S.shake=1;
       beep(70,0.6,'sawtooth');
       endGame(false, onRunway ? 'Atterrissage trop brutal.' : 'Tu t\'es écrasé sur le terrain.');
@@ -1142,7 +1164,7 @@ function update(dt){
 
   // --- alerte altitude ---
   const agl = S.pos.y - groundY;
-  $('warn').style.display = (!S.onGround && agl<35 && S.vy<-3) ? 'block':'none';
+  $('warn').style.display = (!S.onGround && (S.terrainAlert || (agl<35 && S.vy<-3))) ? 'block':'none';
 
   // --- checkpoints du parcours ---
   golds.forEach((g,i)=>{
