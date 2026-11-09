@@ -24,6 +24,11 @@
   #gasL{position:fixed;right:22px;bottom:calc(max(24px,env(safe-area-inset-bottom)) + 156px);width:62px;text-align:center;color:#fff;font-size:11px;font-weight:700;text-shadow:0 1px 4px #000;z-index:10}
   #fire{position:fixed;bottom:calc(max(24px,env(safe-area-inset-bottom)) + 180px);right:100px;width:58px;height:58px;border-radius:50%;
     border:2px solid #fff;background:rgba(206,17,38,.75);color:#fff;font-size:22px;z-index:10}
+  #updown{position:fixed;right:100px;bottom:max(24px,env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:10px;z-index:10}
+  #updown button{width:62px;height:62px;border-radius:50%;border:2px solid rgba(255,255,255,.75);
+    background:rgba(255,255,255,.26);color:#fff;font-size:24px;font-weight:900;line-height:1;
+    -webkit-tap-highlight-color:transparent;touch-action:none;box-shadow:0 4px 12px rgba(0,0,0,.35)}
+  #updown button:active{background:rgba(252,209,22,.85);color:#111}
   #screen{position:fixed;inset:0;z-index:30;display:flex;flex-direction:column;align-items:center;justify-content:center;
     background:linear-gradient(180deg,rgba(0,20,10,.85),rgba(0,0,0,.9));color:#fff;text-align:center;padding:24px}
   #screen h1{font-size:30px;margin:0 0 6px}
@@ -52,13 +57,14 @@
 <div id="joy"><div id="stick"></div></div>
 <div id="gas"><div id="gasK"></div></div>
 <div id="gasL">GAZ</div>
+<div id="updown"><button id="btn-plus" type="button" aria-label="Monter les gaz">▲</button><button id="btn-moins" type="button" aria-label="Baisser les gaz">▼</button></div>
 <button id="fire">💥</button>
 
 <div id="screen">
   <h1>🇬🇳 GUINÉE FLIGHT</h1>
   <div class="flag"><i style="background:#ce1126"></i><i style="background:#fcd116"></i><i style="background:#009460"></i></div>
   <p id="sub">Décolle de Conakry, survole le Fouta Djallon et récupère l'or des mines de Siguiri.</p>
-  <p style="font-size:13px;opacity:.8">Joystick : piquer / cabrer / virer<br>Curseur jaune : régler les gaz<br>Passe 90 km/h sur la piste pour décoller</p>
+  <p style="font-size:13px;opacity:.8">Joystick : piquer / cabrer / virer<br>Boutons ▲▼ ou curseur jaune : régler les gaz<br>Passe 90 km/h sur la piste pour décoller</p>
   <button id="go">DÉCOLLER</button>
 </div>
 
@@ -394,6 +400,26 @@ function endTouch(e){
   }
 }
 addEventListener('touchend',endTouch); addEventListener('touchcancel',endTouch);
+
+
+/* ---------- BOUTONS GAZ (appui maintenu) ---------- */
+(function(){
+  const plus=document.getElementById('btn-plus'), moins=document.getElementById('btn-moins');
+  let tic=null;
+  function lancer(step){
+    arreter();
+    setGas(S.throttle + step);
+    tic=setInterval(()=>setGas(S.throttle + step), 110);
+  }
+  function arreter(){ if(tic){ clearInterval(tic); tic=null; } }
+  if(plus && moins){
+    plus.addEventListener('pointerdown', e=>{ e.preventDefault(); lancer(0.08); });
+    moins.addEventListener('pointerdown', e=>{ e.preventDefault(); lancer(-0.08); });
+    ['pointerup','pointerleave','pointercancel'].forEach(ev=>{
+      plus.addEventListener(ev, arreter); moins.addEventListener(ev, arreter);
+    });
+  }
+})();
 
 /* ---------- SON (WebAudio) ---------- */
 let AC=null, engine=null, engGain=null;
